@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FHIR Questionnaire Renderer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f3ef;
+    --bg-card: #fafaf8;
+    --bg-input: #ffffff;
+    --bg-code: #1a1a18;
+    --ink: #1c1c1a;
+    --ink-2: #4a4a46;
+    --ink-3: #8a8a84;
+    --ink-inv: #f5f3ef;
+    --accent: #2a5c45;
+    --accent-light: #e8f0ec;
+    --accent-mid: #4a9470;
+    --danger: #b83232;
+    --danger-light: #fdf0f0;
+    --border: #dedad4;
+    --border-strong: #b8b4ac;
+    --mono: 'IBM Plex Mono', monospace;
+    --serif: 'Instrument Serif', serif;
+    --sans: 'DM Sans', sans-serif;
+    --r: 6px;
+    --r-lg: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  }
+
+  html { font-size: 15px; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 56px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-logo {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .logo-mark {
+    font-family: var(--serif);
+    font-size: 18px;
+    color: var(--accent);
+    font-style: italic;
+    letter-spacing: -0.01em;
+  }
+  .logo-tag {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .version-pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    color: var(--ink-2);
+    background: transparent;
+    display: none;
+  }
+  .version-pill.visible { display: inline-block; }
+  .version-pill.r5 { border-color: var(--accent-mid); color: var(--accent); background: var(--accent-light); }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+  }
+  .sidebar-section {
+    padding: 0 16px;
+    margin-bottom: 8px;
+  }
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+    padding: 0 4px;
+  }
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--r);
+    cursor: default;
+    transition: background 0.15s;
+    opacity: 0.45;
+  }
+  .step-item.active { opacity: 1; background: var(--accent-light); }
+  .step-item.done { opacity: 0.75; }
+  .step-item.done:hover { opacity: 1; background: var(--bg); cursor: pointer; }
+  .step-dot {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 500; color: var(--ink-3);
+    flex-shrink: 0;
+    background: var(--bg);
+  }
+  .step-item.active .step-dot { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .step-item.done .step-dot { border-color: var(--accent); background: var(--accent); color: var(--ink-inv); }
+  .step-text { font-size: 13px; color: var(--ink-2); }
+  .step-item.active .step-text { color: var(--ink); font-weight: 500; }
+
+  .sidebar-divider { height: 1px; background: var(--border); margin: 12px 16px; }
+
+  .meta-block {
+    padding: 12px 16px;
+    display: none;
+  }
+  .meta-block.visible { display: block; }
+  .meta-q-title {
+    font-family: var(--serif);
+    font-size: 15px;
+    font-style: italic;
+    color: var(--ink);
+    margin-bottom: 4px;
+    line-height: 1.4;
+  }
+  .meta-q-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-3);
+  }
+  .meta-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--ink-3); }
+  .stat-val { font-weight: 500; color: var(--ink-2); font-family: var(--mono); font-size: 11px; }
+
+  /* ── Main content ── */
+  .main {
+    overflow-y: auto;
+    padding: 40px 48px;
+    max-width: 760px;
+  }
+
+  /* ── Phase containers ── */
+  .phase { display: none; animation: fadeUp 0.25s ease both; }
+  .phase.active { display: block; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Phase 1: Load ── */
+  .phase-heading {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-style: italic;
+    color: var(--ink);
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
+  }
+  .phase-sub {
+    font-size: 13px;
+    color: var(--ink-3);
+    margin-bottom: 32px;
+  }
+
+  .input-tabs {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+    width: fit-content;
+    margin-bottom: 16px;
+  }
+  .itab {
+    padding: 7px 20px;
+    font-size: 13px;
+    font-family: var(--sans);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--ink-3);
+    transition: background 0.15s, color 0.15s;
+  }
+  .itab.active { background: var(--ink); color: var(--ink-inv); }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  textarea.json-input {
+    width: 100%;
+    height: 220px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--bg-input);
+    color: var(--ink);
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea.json-input:focus { border-color: var(--accent); }
+
+  .upload-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--r-lg);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg-input);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .upload-zone:hover, .upload-zone.drag {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .upload-zone input { display: none; }
+  .upload-icon {
+    width: 36px; height: 36px;
+    margin: 0 auto 12px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--r);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    background: var(--bg);
+  }
+  .upload-text { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
+  .upload-hint { font-size: 11px; color: var(--ink-3); }
+  .upload-filename {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .action-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--sans);
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--bg); border-color: var(--border-strong); color: var(--ink); }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn.primary:hover { background: #1f4433; border-color: #1f4433; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--ink-3); }
+  .btn.ghost:hover { color: var(--ink); background: var(--bg); border-color: var(--border); }
+  .btn.danger-btn { color: var(--danger); border-color: #e8c4c4; background: var(--danger-light); }
+  .btn.danger-btn:hover { background: #fae0e0; }
+  .btn-icon { font-size: 14px; }
+
+  .err-box {
+    display: none;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--danger-light);
+    border: 1px solid #e8c4c4;
+    border-radius: var(--r);
+    font-size: 12px;
+    color: var(--danger);
+    font-family: var(--mono);
+  }
+  .err-box.visible { display: block; }
+
+  /* ── Phase 2: Form ── */
+  .form-header {
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .form-title {
+    font-family: var(--serif);
+    font-size: 26px;
+    font-style: italic;
+    color: var(--ink);
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+  .form-desc {
+    font-size: 13px;
+    color: var(--ink-3);
+    line-height: 1.6;
+  }
+
+  .form-body { display: flex; flex-direction: column; gap: 20px; }
+
+  /* Form items */
+  .q-group {
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--bg-input);
+  }
+  .q-group-header {
+    padding: 12px 18px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .q-group-icon {
+    width: 18px; height: 18px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    background: var(--bg-card);
+    flex-shrink: 0;
+  }
+  .q-group-title { font-size: 13px; font-weight: 500; color: var(--ink); }
+  .q-group-body { padding: 20px 18px; display: flex; flex-direction: column; gap: 18px; }
+
+  .q-item { display: flex; flex-direction: column; gap: 7px; }
+  .q-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .q-label.req::after { content: " *"; color: var(--danger); }
+  .q-hint { font-size: 11px; color: var(--ink-3); }
+
+  .q-display {
+    font-size: 12px;
+    color: var(--ink-3);
+    font-style: italic;
+    padding: 10px 14px;
+    background: var(--bg);
+    border-radius: var(--r);
+    border-left: 3px solid var(--border-strong);
+    line-height: 1.6;
+  }
+
+  input[type=text], input[type=number], input[type=date],
+  input[type=time], input[type=datetime-local], select {
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: var(--sans);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--bg-input);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus, textarea.q-ta:focus { border-color: var(--accent); }
+
+  textarea.q-ta {
+    width: 100%;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: var(--sans);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--bg-input);
+    color: var(--ink);
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+    transition: border-color 0.15s;
+  }
+
+  .choice-list { display: flex; flex-direction: column; gap: 7px; }
+  .choice-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    cursor: pointer;
+    background: var(--bg-input);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .choice-row:hover { border-color: var(--border-strong); background: var(--bg); }
+  .choice-row.selected { border-color: var(--accent); background: var(--accent-light); }
+  .choice-row input { display: none; }
+  .choice-indicator {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-strong);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .choice-row.checkbox-row .choice-indicator { border-radius: 4px; }
+  .choice-row.selected .choice-indicator {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .choice-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #fff;
+    display: none;
+  }
+  .choice-row.selected .choice-dot { display: block; }
+  .choice-row.checkbox-row.selected .choice-dot {
+    display: block;
+    border-radius: 1px;
+    width: 7px; height: 5px;
+    background: none;
+    border-left: 1.5px solid #fff;
+    border-bottom: 1.5px solid #fff;
+    transform: rotate(-45deg) translate(1px, -1px);
+  }
+  .choice-label { font-size: 13px; color: var(--ink-2); flex: 1; }
+  .choice-row.selected .choice-label { color: var(--accent); font-weight: 500; }
+
+  .oc-other-input {
+    margin-top: 6px;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: var(--sans);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    width: 100%;
+    outline: none;
+    background: var(--bg-input);
+    color: var(--ink);
+    transition: border-color 0.15s;
+    display: none;
+  }
+  .oc-other-input.visible { display: block; }
+  .oc-other-input:focus { border-color: var(--accent); }
+
+  .bool-row { display: flex; gap: 8px; }
+  .bool-opt {
+    flex: 1;
+    padding: 9px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--ink-3);
+    background: var(--bg-input);
+    user-select: none;
+  }
+  .bool-opt:hover { border-color: var(--border-strong); color: var(--ink); }
+  .bool-opt.yes.selected { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+  .bool-opt.no.selected { background: var(--danger-light); border-color: #e8c4c4; color: var(--danger); }
+
+  .field-err {
+    font-size: 11px;
+    color: var(--danger);
+    font-family: var(--mono);
+    display: none;
+  }
+  .field-err.visible { display: block; }
+
+  .submit-row {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .form-err-box {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--danger-light);
+    border: 1px solid #e8c4c4;
+    border-radius: var(--r);
+    font-size: 12px;
+    color: var(--danger);
+    display: none;
+    margin-bottom: 8px;
+  }
+  .form-err-box.visible { display: block; }
+
+  /* ── Phase 3: Response ── */
+  .resp-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .resp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .copy-confirm {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+    font-family: var(--mono);
+    display: none;
+    align-self: center;
+  }
+  .copy-confirm.visible { display: block; }
+
+  .resp-meta {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .resp-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--ink-3);
+    background: var(--bg-input);
+  }
+  .resp-chip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  pre.resp-output {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.75;
+    white-space: pre-wrap;
+    word-break: break-all;
+    padding: 20px;
+    background: var(--bg-code);
+    color: #e8e4d9;
+    border-radius: var(--r-lg);
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #333;
+  }
+  pre.resp-output::-webkit-scrollbar { width: 6px; }
+  pre.resp-output::-webkit-scrollbar-track { background: transparent; }
+  pre.resp-output::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+  /* JSON syntax highlight */
+  .jk { color: #9ec8a0; }  /* key */
+  .js { color: #e8c87e; }  /* string value */
+  .jn { color: #79b4d0; }  /* number */
+  .jb { color: #d08080; }  /* bool/null */
+  .jp { color: #888; }     /* punctuation */
+
+  /* ── Progress bar ── */
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    display: none;
+  }
+  .progress-bar.visible { display: block; }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+    transition: width 0.4s ease;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <span class="logo-mark">FHIR Renderer</span>
+      <span class="logo-tag">Questionnaire → Response</span>
+    </div>
+    <div class="topbar-right">
+      <span class="version-pill" id="version-pill">R4</span>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Workflow</div>
+      <div class="step-item active" id="step-1">
+        <div class="step-dot">1</div>
+        <span class="step-text">Load questionnaire</span>
+      </div>
+      <div class="step-item" id="step-2">
+        <div class="step-dot">2</div>
+        <span class="step-text">Fill form</span>
+      </div>
+      <div class="step-item" id="step-3">
+        <div class="step-dot">3</div>
+        <span class="step-text">Export response</span>
+      </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="meta-block" id="sidebar-meta">
+      <div class="meta-q-title" id="meta-title">—</div>
+      <div class="meta-q-id" id="meta-id"></div>
+      <div class="meta-stats" id="meta-stats"></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Phase 1: Load -->
+    <div class="phase active" id="phase-load">
+      <h1 class="phase-heading">Load a questionnaire</h1>
+      <p class="phase-sub">Paste FHIR R4 or R5 Questionnaire JSON, or upload a <code>.json</code> file.</p>
+
+      <div class="input-tabs">
+        <button class="itab active" onclick="switchTab('paste')">Paste JSON</button>
+        <button class="itab" onclick="switchTab('upload')">Upload file</button>
+      </div>
+
+      <div class="tab-pane active" id="tab-paste">
+        <textarea class="json-input" id="json-paste" placeholder='{ "resourceType": "Questionnaire", ... }'></textarea>
+      </div>
+      <div class="tab-pane" id="tab-upload">
+        <div class="upload-zone" id="drop-zone"
+          onclick="document.getElementById('file-input').click()"
+          ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+          <input type="file" id="file-input" accept=".json,application/json" onchange="fileSelected(event)">
+          <div class="upload-icon">📄</div>
+          <p class="upload-text">Drop <code>.json</code> file here, or click to browse</p>
+          <p class="upload-hint">FHIR R4 or R5 Questionnaire</p>
+          <p class="upload-filename" id="file-name"></p>
+        </div>
+      </div>
+
+      <div class="err-box" id="load-err"></div>
+
+      <div class="action-row">
+        <button class="btn primary" onclick="loadQuestionnaire()">Render form →</button>
+        <button class="btn" onclick="loadSample()">Load sample</button>
+      </div>
+    </div>
+
+    <!-- Phase 2: Form -->
+    <div class="phase" id="phase-form">
+      <div class="form-header">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="flex:1">
+            <div class="form-title" id="q-title">Questionnaire</div>
+            <p class="form-desc" id="q-desc"></p>
+          </div>
+          <button class="btn ghost" onclick="resetToLoad()" style="margin-top:4px">← Back</button>
+        </div>
+      </div>
+
+      <div class="progress-bar visible" id="prog-bar">
+        <div class="progress-fill" id="prog-fill" style="width:0%"></div>
+      </div>
+
+      <div class="form-body" id="form-items"></div>
+
+      <div class="submit-row">
+        <div class="form-err-box" id="form-err"></div>
+        <button class="btn primary" onclick="submitForm()">Generate QuestionnaireResponse →</button>
+        <button class="btn" onclick="clearForm()">Clear all</button>
+      </div>
+    </div>
+
+    <!-- Phase 3: Response -->
+    <div class="phase" id="phase-response">
+      <div class="resp-header">
+        <div>
+          <h1 class="phase-heading" style="margin-bottom:4px">Response ready</h1>
+          <p class="phase-sub" style="margin-bottom:0">FHIR-compliant QuestionnaireResponse generated.</p>
+        </div>
+        <button class="btn ghost" onclick="backToForm()">← Edit answers</button>
+      </div>
+
+      <div class="resp-meta" id="resp-meta"></div>
+
+      <div class="resp-actions" style="margin-bottom:16px">
+        <button class="btn" onclick="copyResponse()">Copy JSON</button>
+        <button class="btn primary" onclick="downloadResponse()">Download .json</button>
+        <button class="btn danger-btn" onclick="resetToLoad()">Start over</button>
+        <span class="copy-confirm" id="copy-confirm">Copied!</span>
+      </div>
+
+      <pre class="resp-output" id="resp-output"></pre>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let qData = null;
+let answers = {};
+let fhirVersion = 'R4';
+let activeTab = 'paste';
+let totalRequired = 0;
+
+const SAMPLE = {
+  resourceType:"Questionnaire",id:"patient-health-intake",version:"1.0",
+  fhirVersion:"4.0.1",title:"Patient Health Intake",
+  description:"General health history and current concerns",status:"active",
+  item:[
+    {linkId:"1",text:"Personal Information",type:"group",item:[
+      {linkId:"1.1",text:"Full name",type:"string",required:true},
+      {linkId:"1.2",text:"Date of birth",type:"date",required:true},
+      {linkId:"1.3",text:"Biological sex",type:"choice",required:true,answerOption:[
+        {valueCoding:{code:"male",display:"Male"}},
+        {valueCoding:{code:"female",display:"Female"}},
+        {valueCoding:{code:"other",display:"Other / prefer not to say"}}
+      ]}
+    ]},
+    {linkId:"2",text:"Current Health",type:"group",item:[
+      {linkId:"2.1",text:"What is your primary concern today?",type:"text"},
+      {linkId:"2.2",text:"Pain level (0–10)",type:"integer"},
+      {linkId:"2.3",text:"Do you have any known allergies?",type:"boolean"},
+      {linkId:"2.4",text:"Current medications (list all)",type:"text"},
+      {linkId:"2.5",text:"Applicable conditions",type:"choice",repeats:true,answerOption:[
+        {valueCoding:{code:"htn",display:"Hypertension"}},
+        {valueCoding:{code:"dm",display:"Diabetes"}},
+        {valueCoding:{code:"asthma",display:"Asthma"}},
+        {valueCoding:{code:"none",display:"None of the above"}}
+      ]}
+    ]},
+    {linkId:"3",text:"How did you hear about us?",type:"open-choice",answerOption:[
+      {valueString:"Referral from doctor"},
+      {valueString:"Online search"},
+      {valueString:"Family / friend"}
+    ]},
+    {linkId:"4",text:"Privacy notice: Your information is protected under HIPAA.",type:"display"}
+  ]
+};
+
+// ── Tab switching ──
+function switchTab(t) {
+  activeTab = t;
+  document.querySelectorAll('.itab').forEach((el,i) => el.classList.toggle('active', (i===0 && t==='paste') || (i===1 && t==='upload')));
+  document.getElementById('tab-paste').classList.toggle('active', t==='paste');
+  document.getElementById('tab-upload').classList.toggle('active', t==='upload');
+}
+
+// ── File upload ──
+function dragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('drag'); }
+function dragLeave() { document.getElementById('drop-zone').classList.remove('drag'); }
+function dropFile(e) { e.preventDefault(); dragLeave(); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); }
+function fileSelected(e) { if (e.target.files[0]) readFile(e.target.files[0]); }
+function readFile(f) {
+  document.getElementById('file-name').textContent = f.name;
+  const r = new FileReader();
+  r.onload = ev => document.getElementById('json-paste').value = ev.target.result;
+  r.readAsText(f);
+}
+
+function loadSample() {
+  document.getElementById('json-paste').value = JSON.stringify(SAMPLE, null, 2);
+  switchTab('paste');
+}
+
+// ── Load ──
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.toggle('visible', !!msg);
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function detectVersion(q) {
+  const fv = (q.fhirVersion || '').toLowerCase();
+  if (fv.startsWith('5') || fv.startsWith('4.6') || fv.startsWith('4.2')) return 'R5';
+  return 'R4';
+}
+
+function countItems(items) {
+  let total = 0, req = 0;
+  items.forEach(it => {
+    if (it.type !== 'group' && it.type !== 'display') { total++; if (it.required) req++; }
+    if (it.item) { const c = countItems(it.item); total += c.total; req += c.req; }
+  });
+  return { total, req };
+}
+
+function loadQuestionnaire() {
+  showErr('load-err', '');
+  const raw = document.getElementById('json-paste').value.trim();
+  if (!raw) { showErr('load-err', 'No JSON provided. Paste or upload a Questionnaire.'); return; }
+  let q;
+  try { q = JSON.parse(raw); } catch(e) { showErr('load-err', 'JSON parse error: ' + e.message); return; }
+  if (q.resourceType !== 'Questionnaire') { showErr('load-err', '"resourceType" must be "Questionnaire".'); return; }
+  if (!Array.isArray(q.item) || q.item.length === 0) { showErr('load-err', 'Questionnaire has no items.'); return; }
+
+  qData = q;
+  answers = {};
+  fhirVersion = detectVersion(q);
+
+  // Version pill
+  const pill = document.getElementById('version-pill');
+  pill.textContent = fhirVersion;
+  pill.className = 'version-pill visible' + (fhirVersion === 'R5' ? ' r5' : '');
+
+  // Form header
+  document.getElementById('q-title').textContent = q.title || q.name || q.id || 'Questionnaire';
+  document.getElementById('q-desc').textContent = q.description || '';
+
+  // Sidebar meta
+  document.getElementById('meta-title').textContent = q.title || q.id || '—';
+  document.getElementById('meta-id').textContent = q.id ? 'id: ' + q.id : '';
+  const counts = countItems(q.item);
+  totalRequired = counts.req;
+  document.getElementById('meta-stats').innerHTML = `
+    <div class="stat-row"><span class="stat-label">Version</span><span class="stat-val">${fhirVersion}</span></div>
+    <div class="stat-row"><span class="stat-label">Questions</span><span class="stat-val">${counts.total}</span></div>
+    <div class="stat-row"><span class="stat-label">Required</span><span class="stat-val">${counts.req}</span></div>
+    <div class="stat-row"><span class="stat-label">Status</span><span class="stat-val">${q.status || 'unknown'}</span></div>
+  `;
+  document.getElementById('sidebar-meta').classList.add('visible');
+
+  renderFormItems(q.item);
+  showPhase('form');
+  updateProgress();
+}
+
+// ── Render form ──
+function renderFormItems(items) {
+  const container = document.getElementById('form-items');
+  container.innerHTML = '';
+  items.forEach(item => container.appendChild(buildItemEl(item)));
+}
+
+function buildItemEl(item) {
+  if (item.type === 'group') {
+    const wrap = document.createElement('div');
+    wrap.className = 'q-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'q-group-header';
+    hdr.innerHTML = `<div class="q-group-icon">▤</div><span class="q-group-title">${esc(item.text || '')}</span>`;
+    wrap.appendChild(hdr);
+    const body = document.createElement('div');
+    body.className = 'q-group-body';
+    (item.item || []).forEach(child => body.appendChild(buildItemEl(child)));
+    wrap.appendChild(body);
+    return wrap;
+  }
+  if (item.type === 'display') {
+    const d = document.createElement('div');
+    d.className = 'q-display';
+    d.textContent = item.text || '';
+    return d;
+  }
+
+  const el = document.createElement('div');
+  el.className = 'q-item';
+
+  const label = document.createElement('div');
+  label.className = 'q-label' + (item.required ? ' req' : '');
+  label.textContent = item.text || item.linkId;
+  el.appendChild(label);
+
+  const inputWrap = document.createElement('div');
+  buildInputWidget(item, inputWrap);
+  el.appendChild(inputWrap);
+
+  const ferr = document.createElement('div');
+  ferr.className = 'field-err';
+  ferr.id = 'ferr_' + item.linkId;
+  el.appendChild(ferr);
+
+  return el;
+}
+
+function buildInputWidget(item, wrap) {
+  const lid = item.linkId;
+  const t = item.type;
+
+  if (t === 'boolean') {
+    wrap.innerHTML = `<div class="bool-row">
+      <div class="bool-opt yes" id="by_${lid}" onclick="setBool('${lid}',true)">Yes</div>
+      <div class="bool-opt no" id="bn_${lid}" onclick="setBool('${lid}',false)">No</div>
+    </div>`;
+    return;
+  }
+
+  if (t === 'choice' || t === 'open-choice') {
+    const opts = item.answerOption || [];
+    const multi = item.repeats === true;
+    const list = document.createElement('div');
+    list.className = 'choice-list';
+    opts.forEach((opt, i) => {
+      const val = getOptVal(opt);
+      const disp = getOptDisp(opt);
+      const row = document.createElement('label');
+      row.className = 'choice-row' + (multi ? ' checkbox-row' : '');
+      row.innerHTML = `<div class="choice-indicator"><div class="choice-dot"></div></div><span class="choice-label">${esc(disp)}</span>`;
+      row.addEventListener('click', () => {
+        if (!multi) {
+          list.querySelectorAll('.choice-row').forEach(r => r.classList.remove('selected'));
+          row.classList.add('selected');
+          answers[lid] = [buildCodingAns(opt)];
+        } else {
+          row.classList.toggle('selected');
+          if (!answers[lid]) answers[lid] = [];
+          const ansObj = buildCodingAns(opt);
+          const str = JSON.stringify(ansObj);
+          if (row.classList.contains('selected')) answers[lid].push(ansObj);
+          else answers[lid] = answers[lid].filter(a => JSON.stringify(a) !== str);
+          if (answers[lid].length === 0) delete answers[lid];
+        }
+        updateProgress();
+        hideFieldErr(lid);
+      });
+      list.appendChild(row);
+    });
+
+    if (t === 'open-choice') {
+      const otherRow = document.createElement('label');
+      otherRow.className = 'choice-row' + (multi ? ' checkbox-row' : '');
+      otherRow.innerHTML = `<div class="choice-indicator"><div class="choice-dot"></div></div><span class="choice-label">Other…</span>`;
+      const otherInput = document.createElement('input');
+      otherInput.type = 'text';
+      otherInput.className = 'oc-other-input';
+      otherInput.placeholder = 'Specify…';
+      otherInput.addEventListener('input', () => {
+        if (!multi) answers[lid] = [{valueString: otherInput.value}];
+        else {
+          if (!answers[lid]) answers[lid] = [];
+          answers[lid] = answers[lid].filter(a => !a._oc);
+          if (otherInput.value) answers[lid].push({valueString: otherInput.value, _oc: true});
+        }
+        updateProgress();
+      });
+      otherRow.addEventListener('click', (e) => {
+        if (e.target === otherInput) return;
+        if (!multi) {
+          list.querySelectorAll('.choice-row').forEach(r => r.classList.remove('selected'));
+          otherRow.classList.toggle('selected');
+        } else otherRow.classList.toggle('selected');
+        otherInput.classList.toggle('visible', otherRow.classList.contains('selected'));
+        if (!otherRow.classList.contains('selected')) {
+          otherInput.value = '';
+          if (answers[lid]) answers[lid] = answers[lid].filter(a => !a._oc);
+        }
+        updateProgress();
+      });
+      list.appendChild(otherRow);
+      list.appendChild(otherInput);
+    }
+
+    wrap.appendChild(list);
+    return;
+  }
+
+  if (t === 'text') {
+    const ta = document.createElement('textarea');
+    ta.className = 'q-ta';
+    ta.addEventListener('input', () => {
+      if (ta.value) answers[lid] = [{valueString: ta.value}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+    wrap.appendChild(ta);
+    return;
+  }
+
+  const inp = document.createElement('input');
+  if (t === 'integer' || t === 'positiveInt' || t === 'unsignedInt') {
+    inp.type = 'number'; inp.step = '1';
+    inp.addEventListener('input', () => {
+      if (inp.value !== '') answers[lid] = [{valueInteger: parseInt(inp.value)}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  } else if (t === 'decimal') {
+    inp.type = 'number'; inp.step = 'any';
+    inp.addEventListener('input', () => {
+      if (inp.value !== '') answers[lid] = [{valueDecimal: parseFloat(inp.value)}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  } else if (t === 'date') {
+    inp.type = 'date';
+    inp.addEventListener('change', () => {
+      if (inp.value) answers[lid] = [{valueDate: inp.value}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  } else if (t === 'dateTime') {
+    inp.type = 'datetime-local';
+    inp.addEventListener('change', () => {
+      if (inp.value) answers[lid] = [{valueDateTime: inp.value}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  } else if (t === 'time') {
+    inp.type = 'time';
+    inp.addEventListener('change', () => {
+      if (inp.value) answers[lid] = [{valueTime: inp.value}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  } else if (t === 'url') {
+    inp.type = 'text'; inp.placeholder = 'https://';
+    inp.addEventListener('input', () => {
+      if (inp.value) answers[lid] = [{valueUri: inp.value}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  } else if (t === 'attachment') {
+    inp.type = 'file';
+    inp.addEventListener('change', () => {
+      const f = inp.files[0];
+      if (!f) { delete answers[lid]; return; }
+      const reader = new FileReader();
+      reader.onload = ev => {
+        answers[lid] = [{valueAttachment:{contentType:f.type,title:f.name,data:ev.target.result.split(',')[1]}}];
+        updateProgress();
+      };
+      reader.readAsDataURL(f);
+    });
+  } else if (t === 'quantity') {
+    inp.type = 'number'; inp.step = 'any'; inp.placeholder = 'Value';
+    inp.addEventListener('input', () => {
+      if (inp.value !== '') answers[lid] = [{valueQuantity:{value:parseFloat(inp.value)}}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  } else {
+    inp.type = 'text';
+    inp.addEventListener('input', () => {
+      if (inp.value) answers[lid] = [{valueString: inp.value}];
+      else delete answers[lid];
+      updateProgress(); hideFieldErr(lid);
+    });
+  }
+  wrap.appendChild(inp);
+}
+
+function setBool(lid, val) {
+  answers[lid] = [{valueBoolean: val}];
+  document.getElementById('by_' + lid)?.classList.toggle('selected', val === true);
+  document.getElementById('bn_' + lid)?.classList.toggle('selected', val === false);
+  updateProgress(); hideFieldErr(lid);
+}
+
+function getOptVal(opt) {
+  if (opt.valueCoding) return opt.valueCoding.code || opt.valueCoding.display || '';
+  if (opt.valueString !== undefined) return opt.valueString;
+  if (opt.valueInteger !== undefined) return String(opt.valueInteger);
+  return '';
+}
+function getOptDisp(opt) {
+  if (opt.valueCoding) return opt.valueCoding.display || opt.valueCoding.code || '';
+  if (opt.valueString !== undefined) return opt.valueString;
+  return String(opt.valueInteger || '');
+}
+function buildCodingAns(opt) {
+  if (opt.valueCoding) return {valueCoding: opt.valueCoding};
+  if (opt.valueString !== undefined) return {valueString: opt.valueString};
+  if (opt.valueInteger !== undefined) return {valueInteger: opt.valueInteger};
+  return {valueString: ''};
+}
+
+// ── Progress ──
+function countAnswered(items) {
+  let answered = 0, req = 0;
+  items.forEach(it => {
+    if (it.type !== 'group' && it.type !== 'display') {
+      if (it.required) { req++; if (answers[it.linkId]) answered++; }
+    }
+    if (it.item) { const c = countAnswered(it.item); answered += c.answered; req += c.req; }
+  });
+  return { answered, req };
+}
+function updateProgress() {
+  if (!qData) return;
+  const { answered, req } = countAnswered(qData.item);
+  const pct = req > 0 ? Math.round((answered / req) * 100) : 0;
+  document.getElementById('prog-fill').style.width = pct + '%';
+}
+
+// ── Validation ──
+function collectRequiredMissing(items, missing) {
+  items.forEach(it => {
+    if (it.type !== 'group' && it.type !== 'display') {
+      if (it.required && !answers[it.linkId]) missing.push(it.linkId);
+    }
+    if (it.item) collectRequiredMissing(it.item, missing);
+  });
+}
+function hideFieldErr(lid) {
+  const el = document.getElementById('ferr_' + lid);
+  if (el) { el.textContent = ''; el.classList.remove('visible'); }
+}
+
+// ── Submit ──
+function submitForm() {
+  const formErr = document.getElementById('form-err');
+  formErr.classList.remove('visible');
+  document.querySelectorAll('.field-err').forEach(e => { e.textContent = ''; e.classList.remove('visible'); });
+
+  const missing = [];
+  collectRequiredMissing(qData.item, missing);
+  if (missing.length > 0) {
+    missing.forEach(lid => {
+      const el = document.getElementById('ferr_' + lid);
+      if (el) { el.textContent = 'Required'; el.classList.add('visible'); }
+    });
+    formErr.textContent = missing.length + ' required field(s) need a response.';
+    formErr.classList.add('visible');
+    return;
+  }
+
+  const qr = buildQR();
+  const jsonStr = JSON.stringify(qr, null, 2);
+  document.getElementById('resp-output').innerHTML = syntaxHighlight(jsonStr);
+
+  // Response meta chips
+  const itemCount = (qr.item || []).reduce((n, i) => n + (i.item ? i.item.length : 1), 0);
+  document.getElementById('resp-meta').innerHTML = `
+    <div class="resp-chip"><div class="resp-chip-dot"></div>${fhirVersion}</div>
+    <div class="resp-chip"><div class="resp-chip-dot"></div>status: completed</div>
+    <div class="resp-chip"><div class="resp-chip-dot"></div>${Object.keys(answers).length} answers</div>
+    <div class="resp-chip"><div class="resp-chip-dot"></div>${new Date().toLocaleDateString()}</div>
+  `;
+
+  showPhase('response');
+}
+
+function buildQR() {
+  const now = new Date().toISOString();
+  const qr = {
+    resourceType: 'QuestionnaireResponse',
+    status: 'completed',
+    questionnaire: qData.url || ('Questionnaire/' + (qData.id || 'unknown')),
+    authored: now,
+    item: buildQRItems(qData.item)
+  };
+  return JSON.parse(JSON.stringify(qr, (k, v) => (k === '_oc' || k === '_open') ? undefined : v));
+}
+
+function buildQRItems(items) {
+  const out = [];
+  items.forEach(item => {
+    if (item.type === 'display') return;
+    if (item.type === 'group') {
+      const g = {linkId: item.linkId, text: item.text};
+      if (item.item) {
+        const sub = buildQRItems(item.item);
+        if (sub.length) g.item = sub;
+      }
+      out.push(g); return;
+    }
+    const ans = answers[item.linkId];
+    const qi = {linkId: item.linkId, text: item.text};
+    if (ans && ans.length > 0) qi.answer = ans.map(a => { const c = {...a}; delete c._oc; delete c._open; return c; });
+    if (item.item) {
+      const sub = buildQRItems(item.item);
+      if (sub.length) qi.item = sub;
+    }
+    out.push(qi);
+  });
+  return out;
+}
+
+// ── Syntax highlight ──
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)"(\s*:)/g, '<span class="jk">"$1"</span>$2')
+    .replace(/:\s*"([^"]*)"/g, ': <span class="js">"$1"</span>')
+    .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="jn">$1</span>')
+    .replace(/:\s*(true|false|null)/g, ': <span class="jb">$1</span>');
+}
+
+// ── Actions ──
+function copyResponse() {
+  const json = document.getElementById('resp-output').textContent;
+  navigator.clipboard.writeText(json).then(() => {
+    const c = document.getElementById('copy-confirm');
+    c.classList.add('visible');
+    setTimeout(() => c.classList.remove('visible'), 2200);
+  });
+}
+function downloadResponse() {
+  const json = document.getElementById('resp-output').textContent;
+  const blob = new Blob([json], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'QuestionnaireResponse_' + (qData?.id || 'response') + '.json';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+function clearForm() {
+  answers = {};
+  document.querySelectorAll('.choice-row').forEach(r => r.classList.remove('selected'));
+  document.querySelectorAll('.bool-opt').forEach(r => r.classList.remove('selected'));
+  document.querySelectorAll('input[type=text],input[type=number],input[type=date],input[type=time],input[type=datetime-local],textarea.q-ta').forEach(i => i.value = '');
+  document.querySelectorAll('.oc-other-input').forEach(i => { i.value = ''; i.classList.remove('visible'); });
+  document.querySelectorAll('.field-err').forEach(e => { e.textContent = ''; e.classList.remove('visible'); });
+  document.getElementById('form-err').classList.remove('visible');
+  updateProgress();
+}
+function backToForm() { showPhase('form'); }
+function resetToLoad() {
+  qData = null; answers = {};
+  document.getElementById('version-pill').classList.remove('visible');
+  document.getElementById('sidebar-meta').classList.remove('visible');
+  showPhase('load');
+}
+
+// ── Phase manager ──
+function showPhase(name) {
+  ['load','form','response'].forEach((p, i) => {
+    document.getElementById('phase-' + p).classList.toggle('active', p === name);
+    const si = document.getElementById('step-' + (i+1));
+    if (p === name) { si.classList.add('active'); si.classList.remove('done'); }
+    else if (
+      (name === 'form' && p === 'load') ||
+      (name === 'response' && (p === 'load' || p === 'form'))
+    ) { si.classList.remove('active'); si.classList.add('done'); }
+    else { si.classList.remove('active','done'); }
+  });
+  // Back-nav from sidebar
+  document.getElementById('step-1').onclick = name !== 'load' ? resetToLoad : null;
+  document.getElementById('step-2').onclick = name === 'response' ? backToForm : null;
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
