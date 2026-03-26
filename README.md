@@ -8,7 +8,7 @@ No build step. No server. Open the HTML file in a browser and it works.
 
 ## Demo
 
-1. Open `fhir-questionnaire-renderer.html` in any modern browser
+1. Open `index.html` in any modern browser
 2. Click **Load sample** to see a pre-built patient intake form
 3. Fill out the form and click **Generate QuestionnaireResponse**
 4. Copy or download the JSON output
@@ -59,7 +59,7 @@ No installation required.
 
 ```bash
 # Option 1: Just open it
-open fhir-questionnaire-renderer.html
+open index.html
 
 # Option 2: Serve it locally if you prefer
 npx serve .
@@ -156,7 +156,7 @@ Any modern browser (Chrome, Firefox, Safari, Edge). No polyfills needed.
 ## File structure
 
 ```
-fhir-questionnaire-renderer.html   # The entire app — HTML, CSS, JS in one file
+index.html   # The entire app — HTML, CSS, JS in one file
 README.md
 ```
 
